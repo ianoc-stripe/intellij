@@ -67,6 +67,40 @@ public class BlazeImportUtil {
     return null;
   }
 
+  @Nullable
+  public static String javaResourcePackageFor(TargetIdeInfo target, boolean inferPackage) {
+    String definedJavaPackage = javaResourcePackageFor(target);
+    if (!inferPackage || definedJavaPackage != null) {
+      return definedJavaPackage;
+    }
+
+    // Blaze ensures that all android targets either provide a custom package override, or have
+    // blaze package of the form:
+    //        //any/path/java/package/name/with/slashes, or
+    //        //any/path/javatests/package/name/with/slashes
+    // We use this fact to infer package name.
+    WorkspacePath blazePackage = target.getKey().getLabel().blazePackage();
+    String javaPrefix = "/java/";
+    String javatestsPrefix = "/javatests/";
+
+    String javaPackage = "//" + blazePackage.relativePath();
+    int idx = javaPackage.lastIndexOf(javaPrefix);
+    if (idx != -1) {
+      javaPackage = javaPackage.substring(idx + javaPrefix.length());
+    }
+
+    idx = javaPackage.lastIndexOf(javatestsPrefix);
+    if (idx != -1) {
+      javaPackage = javaPackage.substring(idx + javatestsPrefix.length());
+    }
+
+    if (javaPackage.startsWith("//")) {
+      javaPackage = javaPackage.substring("//".length());
+    }
+
+    return javaPackage.replace('/', '.');
+  }
+
   static Consumer<Output> asConsumer(BlazeContext context) {
     return (Output issue) -> {
       context.output(issue);
