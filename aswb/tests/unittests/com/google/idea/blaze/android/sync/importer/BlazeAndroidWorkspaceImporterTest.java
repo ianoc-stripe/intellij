@@ -185,6 +185,14 @@ public class BlazeAndroidWorkspaceImporterTest extends BlazeTestCase {
 
   private BlazeAndroidImportResult importWorkspace(
       WorkspaceRoot workspaceRoot, TargetMapBuilder targetMapBuilder, ProjectView projectView) {
+    return this.importWorkspace(workspaceRoot, targetMapBuilder, projectView, true);
+  }
+
+  private BlazeAndroidImportResult importWorkspace(
+      WorkspaceRoot workspaceRoot,
+      TargetMapBuilder targetMapBuilder,
+      ProjectView projectView,
+      boolean mergeResources) {
     ProjectViewSet projectViewSet = ProjectViewSet.builder().add(projectView).build();
     TargetMap targetMap = targetMapBuilder.build();
     BlazeAndroidWorkspaceImporter workspaceImporter =
@@ -194,7 +202,7 @@ public class BlazeAndroidWorkspaceImporterTest extends BlazeTestCase {
             BlazeImportInput.forProject(
                 project, workspaceRoot, projectViewSet, targetMap, FAKE_ARTIFACT_DECODER));
 
-    return workspaceImporter.importWorkspace();
+    return workspaceImporter.importWorkspace(mergeResources);
   }
 
   private BlazeJavaImportResult importJavaWorkspace(
@@ -840,8 +848,58 @@ public class BlazeAndroidWorkspaceImporterTest extends BlazeTestCase {
         AndroidResourceModule.builder(TargetKey.forPlainTarget(Label.create("//java/example:lib")))
             .addResourceAndTransitiveResource(source("java/example/res"))
             .build();
+    BlazeAndroidImportResult result =
+        importWorkspace(workspaceRoot, targetMapBuilder, projectView, false);
+    errorCollector.assertIssueContaining("Multiple R classes generated");
+
+    assertThat(result.androidResourceModules).containsExactly(expectedAndroidResourceModule);
+  }
+
+  @Test
+  public void testMergeConflictingResourceRClasses() {
+    ProjectView projectView =
+        ProjectView.builder()
+            .add(
+                ListSection.builder(DirectorySection.KEY)
+                    .add(DirectoryEntry.include(new WorkspacePath("java/example"))))
+            .build();
+
+    TargetMapBuilder targetMapBuilder =
+        TargetMapBuilder.builder()
+            .addTarget(
+                TargetIdeInfo.builder()
+                    .setLabel("//java/example:lib")
+                    .setBuildFile(source("java/example/BUILD"))
+                    .setKind("android_library")
+                    .setAndroidInfo(
+                        AndroidIdeInfo.builder()
+                            .setManifestFile(source("java/example/AndroidManifest.xml"))
+                            .addResource(source("java/example/res"))
+                            .setGenerateResourceClass(true)
+                            .setResourceJavaPackage("com.google.android.example"))
+                    .addDependency("//java/example2:resources")
+                    .build())
+            .addTarget(
+                TargetIdeInfo.builder()
+                    .setLabel("//java/example:lib2")
+                    .setBuildFile(source("java/example2/BUILD"))
+                    .setKind("android_library")
+                    .setAndroidInfo(
+                        AndroidIdeInfo.builder()
+                            .setManifestFile(source("java/example2/AndroidManifest.xml"))
+                            .addResource(source("java/example/res2"))
+                            .setGenerateResourceClass(true)
+                            .setResourceJavaPackage("com.google.android.example"))
+                    .build());
+
+    AndroidResourceModule expectedAndroidResourceModule =
+        AndroidResourceModule.builder(TargetKey.forPlainTarget(Label.create("//java/example:lib")))
+            .addResourceAndTransitiveResource(source("java/example/res"))
+            .addResourceAndTransitiveResource(source("java/example/res2"))
+            .build();
     BlazeAndroidImportResult result = importWorkspace(workspaceRoot, targetMapBuilder, projectView);
     errorCollector.assertIssueContaining("Multiple R classes generated");
+    errorCollector.assertIssueContaining("Merging Resources...");
 
     assertThat(result.androidResourceModules).containsExactly(expectedAndroidResourceModule);
   }

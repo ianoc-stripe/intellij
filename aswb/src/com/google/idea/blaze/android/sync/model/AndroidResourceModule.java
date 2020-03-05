@@ -24,7 +24,6 @@ import com.google.idea.blaze.base.ideinfo.ProtoWrapper;
 import com.google.idea.blaze.base.ideinfo.TargetKey;
 import com.google.idea.blaze.base.model.primitives.Label;
 import java.util.Collection;
-import java.util.List;
 import java.util.Set;
 import javax.annotation.concurrent.Immutable;
 import org.jetbrains.annotations.NotNull;
@@ -147,7 +146,7 @@ public final class AndroidResourceModule
       return this;
     }
 
-    public Builder addAllResources(List<ArtifactLocation> resources) {
+    public Builder addResources(Collection<ArtifactLocation> resources) {
       this.resources.addAll(resources);
       return this;
     }

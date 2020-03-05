@@ -15,6 +15,7 @@
  */
 package com.google.idea.blaze.android.sync.importer;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.ImmutableList;
@@ -37,10 +38,13 @@ import com.google.idea.blaze.base.model.LibraryKey;
 import com.google.idea.blaze.base.scope.BlazeContext;
 import com.google.idea.blaze.base.scope.Output;
 import com.google.idea.blaze.base.scope.output.IssueOutput;
+import com.google.idea.blaze.base.scope.output.IssueOutput.Category;
 import com.google.idea.blaze.base.scope.output.PerformanceWarning;
+import com.google.idea.common.experiments.BoolExperiment;
 import com.intellij.openapi.project.Project;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +56,9 @@ import org.jetbrains.annotations.Nullable;
 
 /** Builds a BlazeWorkspace. */
 public class BlazeAndroidWorkspaceImporter {
+
+  private static final BoolExperiment mergeResourcesEnabled =
+      new BoolExperiment("blaze.merge.conflicting.resources", true);
 
   private final Project project;
   private final Consumer<Output> context;
@@ -79,6 +86,11 @@ public class BlazeAndroidWorkspaceImporter {
   }
 
   public BlazeAndroidImportResult importWorkspace() {
+    return this.importWorkspace(mergeResourcesEnabled.getValue());
+  }
+
+  @VisibleForTesting
+  BlazeAndroidImportResult importWorkspace(boolean mergeResources) {
     List<TargetIdeInfo> sourceTargets = BlazeImportUtil.getSourceTargets(input);
     LibraryFactory libraries = new LibraryFactory();
     ImmutableList.Builder<AndroidResourceModule> resourceModules = new ImmutableList.Builder<>();
@@ -105,7 +117,7 @@ public class BlazeAndroidWorkspaceImporter {
         whitelistedGenResourcePaths);
 
     ImmutableList<AndroidResourceModule> androidResourceModules =
-        buildAndroidResourceModules(resourceModules.build());
+        buildAndroidResourceModules(resourceModules.build(), mergeResources);
     return new BlazeAndroidImportResult(
         androidResourceModules,
         libraries.getAarLibs(),
@@ -237,7 +249,7 @@ public class BlazeAndroidWorkspaceImporter {
   }
 
   private ImmutableList<AndroidResourceModule> buildAndroidResourceModules(
-      ImmutableList<AndroidResourceModule> inputModules) {
+      ImmutableList<AndroidResourceModule> inputModules, boolean mergeResources) {
     // Filter empty resource modules
     List<AndroidResourceModule> androidResourceModules =
         inputModules.stream()
@@ -275,15 +287,24 @@ public class BlazeAndroidWorkspaceImporter {
         for (AndroidResourceModule androidResourceModule : androidResourceModulesWithJavaPackage) {
           messageBuilder.append("  ").append(androidResourceModule.targetKey).append('\n');
         }
-        String message = messageBuilder.toString();
-        context.accept(new PerformanceWarning(message));
-        context.accept(IssueOutput.warn(message).build());
 
-        result.add(selectBestAndroidResourceModule(androidResourceModulesWithJavaPackage));
+        if (mergeResources) {
+          messageBuilder.append("  ").append("Merging Resources...").append("\n");
+          String message = messageBuilder.toString();
+          context.accept(IssueOutput.issue(Category.INFORMATION, message).build());
+
+          result.add(mergeAndroidResourceModules(androidResourceModulesWithJavaPackage));
+        } else {
+          String message = messageBuilder.toString();
+          context.accept(new PerformanceWarning(message));
+          context.accept(IssueOutput.warn(message).build());
+
+          result.add(selectBestAndroidResourceModule(androidResourceModulesWithJavaPackage));
+        }
       }
     }
 
-    Collections.sort(result, (lhs, rhs) -> lhs.targetKey.compareTo(rhs.targetKey));
+    Collections.sort(result, Comparator.comparing(m -> m.targetKey));
     return ImmutableList.copyOf(result);
   }
 
@@ -307,6 +328,27 @@ public class BlazeAndroidWorkspaceImporter {
                             .length()) // Shortest label wins - note lhs, rhs are flipped
                     .result())
         .get();
+  }
+
+  private AndroidResourceModule mergeAndroidResourceModules(
+      Collection<AndroidResourceModule> modules) {
+    // Choose the shortest label as the canonical label (arbitrarily chosen from the original
+    // filtering logic)
+    TargetKey targetKey =
+        modules.stream()
+            .map(m -> m.targetKey)
+            .min(Comparator.comparingInt(tk -> tk.toString().length()))
+            .get();
+
+    AndroidResourceModule.Builder moduleBuilder = AndroidResourceModule.builder(targetKey);
+    modules.forEach(
+        m ->
+            moduleBuilder
+                .addResources(m.resources)
+                .addTransitiveResources(m.transitiveResources)
+                .addResourceLibraryKeys(m.resourceLibraryKeys)
+                .addTransitiveResourceDependencies(m.transitiveResourceDependencies));
+    return moduleBuilder.build();
   }
 
   static class LibraryFactory {
