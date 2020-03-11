@@ -325,6 +325,8 @@ public class JarCache {
     }
   }
 
+
+
   /**
    * Gets the cached file for a jar. If it doesn't exist, we return the file from the library, or
    * null if that also can't be accessed locally.
@@ -359,6 +361,13 @@ public class JarCache {
     return Optional.ofNullable(cacheState.get(cacheKey));
   }
 
+  private static File patchExternalFilePath(File maybeExternal) {
+    String externalString = maybeExternal.toString();
+    if(externalString.contains("/external/") && !externalString.contains("/bazel-out/")) {
+      return new File(externalString.replaceAll("/execroot.*external", "/external"));
+    }
+    return maybeExternal;
+  }
   /** The file to return if there's no locally cached version. */
   @Nullable
   private static File getFallbackFile(BlazeArtifact output) {
@@ -366,7 +375,7 @@ public class JarCache {
       // TODO(brendandouglas): copy locally on the fly?
       return null;
     }
-    return ((LocalFileArtifact) output).getFile();
+    return patchExternalFilePath(((LocalFileArtifact) output).getFile());
   }
 
   private static String cacheKeyInternal(BlazeArtifact output) {
