@@ -68,7 +68,10 @@ import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import javax.swing.event.HyperlinkEvent;
 
-class AddSourceToProjectHelper {
+/** Util functions for Adding Source to Project */
+public class AddSourceToProjectHelper {
+
+  private AddSourceToProjectHelper() {}
 
   private static final NotificationGroup NOTIFICATION_GROUP =
       new NotificationGroup(
@@ -292,7 +295,7 @@ class AddSourceToProjectHelper {
   }
 
   /** Returns true if the source is already covered by the current .blazeproject directories. */
-  static boolean sourceInProjectDirectories(LocationContext context) {
+  public static boolean sourceInProjectDirectories(LocationContext context) {
     return context.getImportRoots().containsWorkspacePath(context.workspacePath);
   }
 
@@ -333,7 +336,7 @@ class AddSourceToProjectHelper {
 
   /** Returns the location context related to a source file to be added to the project. */
   @Nullable
-  static LocationContext getContext(Project project, VirtualFile file) {
+  public static LocationContext getContext(Project project, VirtualFile file) {
     BlazeProjectData syncData = BlazeProjectDataManager.getInstance(project).getBlazeProjectData();
     if (syncData == null) {
       return null;
@@ -357,7 +360,7 @@ class AddSourceToProjectHelper {
   }
 
   /** Location context related to a source file to be added to the project. */
-  static class LocationContext {
+  public static class LocationContext {
     final Project project;
     final BlazeProjectData syncData;
     final ProjectViewSet projectViewSet;

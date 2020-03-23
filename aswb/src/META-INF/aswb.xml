@@ -70,6 +70,8 @@
     <TestContextProvider
         implementation="com.google.idea.blaze.android.run.test.AndroidTestContextProvider"
         order="first, before JavaTestContextProvider"/>
+    <BlazeTextHighlightStatsCollector implementation="com.google.idea.blaze.android.editor.UnresolvedResourceStatsCollector"/>
+    <SyncListener implementation="com.google.idea.blaze.android.editor.UnresolvedResourceStatsCollector" />
   </extensions>
 
   <extensions defaultExtensionNs="com.android.ide">
