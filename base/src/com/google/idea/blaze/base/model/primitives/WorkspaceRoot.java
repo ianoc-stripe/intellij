@@ -18,18 +18,30 @@ package com.google.idea.blaze.base.model.primitives;
 import com.google.idea.blaze.base.ideinfo.ProtoWrapper;
 import com.google.idea.blaze.base.settings.BlazeImportSettings;
 import com.google.idea.blaze.base.settings.BlazeImportSettingsManager;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import java.io.File;
+import java.io.IOException;
 import javax.annotation.Nullable;
 
 /** Represents a workspace root */
 public class WorkspaceRoot implements ProtoWrapper<String> {
+  Logger logger = Logger.getInstance(WorkspaceRoot.class);
   private final File directory;
 
   public WorkspaceRoot(File directory) {
-    this.directory = directory;
+    this.directory = getCanonicalFile(directory);
+  }
+
+  private File getCanonicalFile(File file) {
+    try {
+      return file.getCanonicalFile();
+    } catch (IOException e) {
+      logger.warn("Fail to resolve canonical path for " + file.getPath(), e);
+      return file;
+    }
   }
 
   /**
@@ -75,11 +87,11 @@ public class WorkspaceRoot implements ProtoWrapper<String> {
   }
 
   public WorkspacePath workspacePathFor(File file) {
-    return workspacePathFor(file.getPath());
+    return workspacePathFor(getCanonicalFile(file).getPath());
   }
 
   public WorkspacePath workspacePathFor(VirtualFile file) {
-    return workspacePathFor(file.getPath());
+    return workspacePathFor(file.getCanonicalPath());
   }
 
   private WorkspacePath workspacePathFor(String path) {
@@ -99,7 +111,7 @@ public class WorkspaceRoot implements ProtoWrapper<String> {
    */
   @Nullable
   public WorkspacePath workspacePathForSafe(File absoluteFile) {
-    return workspacePathForSafe(absoluteFile.getPath());
+    return workspacePathForSafe(getCanonicalFile(absoluteFile).getPath());
   }
 
   /**
@@ -108,7 +120,7 @@ public class WorkspaceRoot implements ProtoWrapper<String> {
    */
   @Nullable
   public WorkspacePath workspacePathForSafe(VirtualFile file) {
-    return workspacePathForSafe(file.getPath());
+    return workspacePathForSafe(file.getCanonicalPath());
   }
 
   @Nullable
@@ -123,11 +135,11 @@ public class WorkspaceRoot implements ProtoWrapper<String> {
   }
 
   public boolean isInWorkspace(File file) {
-    return isInWorkspace(file.getPath());
+    return isInWorkspace(getCanonicalFile(file).getPath());
   }
 
   public boolean isInWorkspace(VirtualFile file) {
-    return isInWorkspace(file.getPath());
+    return isInWorkspace(file.getCanonicalPath());
   }
 
   private boolean isInWorkspace(String path) {
